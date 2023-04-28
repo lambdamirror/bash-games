@@ -25,7 +25,13 @@ declare -A figUnicodes=(
     [K]="\u265A" [Q]="\u265B" [R]="\u265C" [B]="\u265D" [N]="\u265E" [P]="\u265F"
 )
 state="rnbqkbnr/pppppppp/00000000/00000000/00000000/00000000/PPPPPPPP/RNBQKBNR"
-state="rnbqkbnr/00000000/00000000/00000000/rnbqkbnr/00000000/PPPPPPPP/RNBQKBNR"
+
+# Helpers
+function index() {
+    local pre
+    pre=${state%%$1*}
+    echo ${#pre}
+}
 
 function range() {
     local array=()
@@ -82,42 +88,76 @@ function abs() {
     echo "$(($1 * $(sign $1)))"
 }
 
+function collinear() {
+    local x1 y1 x2 y2 x3 y3
+    x1=$1 && y1=$2 && x2=$3 && y2=$4 && x3=$5 && y3=$6
+    if (((y3 - y2) * (x2 - x1) == (y2 - y1) * (x3 - x2) && (y3 - y2) * (x3 - x2) >= 0)); then
+        return 0
+    fi
+    return 1
+}
+
+# Core logics
 function canMove() {
-    local pos next r1 c1 r2 c2 f t cdif rdif
+    local pos next r1 c1 r2 c2 f t cdif rdif iPath
+    local r c i j
     pos=$1
     next=$2
+    if [[ $f == "0" ]] || [[ $pos == $next ]]; then
+        return 1
+    fi
     r1=$(row $pos)
     c1=$(col $pos)
     r2=$(row $next)
     c2=$(col $next)
-    ((cdif = c1 - c2))
-    ((rdif = r1 - r2))
+    ((cdif = c2 - c1))
+    ((rdif = r2 - r1))
     f=${state:pos:1}
     t=${state:next:1}
-    # check army blocks
+    # check path betwwen
+    if [[ $cdif == 0 ]] || [[ $rdif == 0 ]] || [[ $cdif == $rdif ]]; then
+        for ((i = 0; i <= $(abs $rdif); i++)); do
+            for ((j = 0; j <= $(abs $cdif); j++)); do
+                ((r = r1 + $(sign $rdif) * i))
+                ((c = c1 + $(sign $cdif) * j))
+                if collinear $c1 $r1 $c $r $c2 $r2; then
+                    iPath=$(fIndex $r $c)
+                    if [[ $iPath != $pos ]] && [[ $iPath != $next ]] && [[ ${state:iPath:1} != "0" ]]; then
+                        # echo cdif=$cdif i=$i j=$j iPath=${state:iPath:1}
+                        # printf "p1=(%s, %s) p=(%s, %s) p2=(%s, %s)\n" $c1 $r1 $c $r $c2 $r2
+                        return 1
+                    fi
+                fi
+            done
+        done
+    fi
+    # check army at target
     fWhite=false
-    if [[ ${f,,} == $f ]] && [[ $f != "0" ]]; then fWhite=true 
+    if [[ ${f,,} == $f ]]; then
+        fWhite=true
     fi
     tWhite=false
-    if [[ ${t,,} == $t ]] && [[ $t != "0" ]]; then tWhite=true 
+    if [[ ${t,,} == $t ]]; then
+        tWhite=true
     fi
-    # echo next=$next t=$t fWhite=$fWhite tWhite=$tWhite
-    if [[ $f == "0" ]] || [[ $fWhite == $tWhite ]]; then
+    if [[ $t != "0" ]] && [[ $fWhite == $tWhite ]]; then
         return 1
     fi
     # validate pieces' move
-    if [[ $f == "0" ]]; then
-        return 1
-    elif [[ $f == "k" || $f == "K" ]]; then
-        return 1
+    if [[ $f == "k" || $f == "K" ]]; then
+        if (($(abs $cdif) + $(abs $rdif) == 1 || $(abs $cdif) * $(abs $rdif) == 1)); then
+            return 0
+        fi
     elif [[ $f == "q" || $f == "Q" ]]; then
-        return 1
+        if ((r1 == r2 || c1 == c2 || $(abs $cdif) == $(abs $rdif))); then
+            return 0
+        fi
     elif [[ $f == "r" || $f == "R" ]]; then
         if ((r1 == r2 || c1 == c2)); then
             return 0
         fi
     elif [[ $f == "b" || $f == "B" ]]; then
-        if ((cdif != 0 && $(abs $cdif) == $(abs $rdif))); then
+        if (($(abs $cdif) == $(abs $rdif))); then
             return 0
         fi
     # knight
@@ -136,6 +176,9 @@ function canMove() {
                     return 0
                 fi
             fi
+            # en passant
+            ### CODE HERE
+
         elif [[ ${t^^} == $t ]]; then
             # move to opponent's pieces
             if (((c2 == (c1 + 1) || c2 == (c1 - 1)) && r2 == (r1 + 1))); then
@@ -170,8 +213,44 @@ function move() {
     f=${state:pos:1}
     state=$(setChar $state $pos "0")
     state=$(setChar $state $next $f)
+    # pawn promotion
+    ### CODE HERE
 }
 
+function checkMate() {
+    local side f fWhite i j
+    side=$1
+    j=$(index "K")
+    if [[ $side == "white" ]]; then
+        j=$(index "k")
+    fi
+    for ((i == 0; i < ${#state}; i++)); do
+        f=${state:i:1}
+        if [[ $f == "0" ]] || [[ $f == "/" ]]; then
+            continue
+        fi
+        if ([[ $side == "white" ]] && [[ ${f^^} == $f ]]) || ([[ $side == "black" ]] && [[ ${f,,} == $f ]]); then
+            if canMove $i $j; then
+                return 0
+            fi
+        fi
+    done
+    return 1
+}
+
+function hasKing() {
+    # black
+    local side i j
+    side=$1
+    if [[ $side == "white" ]]; then
+        for ((i = 0; i < {#state}; i++)); do
+            if canMove 
+        done
+    fi
+    # white
+}
+
+# Graphic UI
 function drawCell() {
     local f i r c
     f=$1
@@ -211,28 +290,38 @@ function drawBoard() {
     echo -ne "\033[0m"
 }
 
-# drawBoard
+# Testing
 echo -ne "\033[?25l" # hide cursor
+pieces=("k" "K" "q" "Q" "r" "n" "b" "p" "P")
 start=$state
-pos=$(fIndex 4 2)
-for ((i = 0; i < ${#state}; i++)); do
-    f=${state:$i:1}
-    if [[ $f != "/" ]]; then
-        if canMove $pos $i; then
-            sleep 1
-            move $pos $i
-            # pos=$i
-            drawBoard
-            sleep 1
-            state=$start
-            drawBoard
-        fi
-    fi
-done
+# drawBoard
+# for f in ${pieces[@]}; do
+#     for ((i = 0; i < ${#start}; i++)); do
+#         if [[ ${start:i:1} == "/" ]]; then
+#             continue
+#         fi
+#         fStart=$(setChar $start $i $f)
+#         state=$fStart
+#         # drawBoard
+#         for ((j = 0; j < ${#state}; j++)); do
+#             if [[ ${state:j:1} == "/" ]]; then
+#                 continue
+#             fi
+#             if canMove $i $j; then
+#                 sleep 0.5
+#                 move $i $j
+#                 drawBoard
+#                 sleep 0.5
+#                 state=$fStart
+#                 drawBoard
+#             fi
+#         done
+#     done
+# done
 
+state="rnbqkbnr/ppp0pppp/00000000/0B000000/00000000/00000000/PPPPPPPP/RNBQKBNR"
+drawBoard
+if checkMate "white"; then
+    echo "checkMate white"
+fi
 echo -ne "\033[0m" # reset styling
-# drawBoard
-# move $pos $next
-# sleep 2
-# drawBoard
-# echo -e "\n"
