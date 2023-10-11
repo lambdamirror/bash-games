@@ -242,6 +242,10 @@ function hasKing() {
     # black
     local side i j
     side=$1
+    j=$(index "K")
+    if [[ $side == "white" ]]; then
+        j=$(index "k")
+    fi
     if [[ $side == "white" ]]; then
         for ((i = 0; i < {#state}; i++)); do
             if canMove 
